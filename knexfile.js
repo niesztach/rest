@@ -45,4 +45,17 @@ const config = {
   }
 };
 
-export default config;
+export default {
+  development: {
+    client: 'sqlite3',
+    connection: {
+      // Jedno wywołanie: plik bazy będzie w folderze data
+      filename: './data/data.db'
+    },
+    useNullAsDefault: true,
+    migrations: {
+      // Tutaj Knex będzie szukał migracji
+      directory: './db/migrations'
+    }
+  }
+};

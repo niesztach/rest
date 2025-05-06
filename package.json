@@ -11,7 +11,7 @@
   "type": "module",
   "scripts": {
     "migrate": "knex migrate:latest",
-    "start": "npm run migrate && node src/index.js"
+    "start": "npm run migrate && node index.js"
   },
   "keywords": [],
   "author": "",
