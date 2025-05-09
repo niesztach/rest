@@ -1,0 +1,340 @@
+{
+  "info": {
+    "name": "REST API Tests - Users, Departments, Envs",
+    "_postman_id": "test-collection-id",
+    "description": "Testy funkcjonalne REST API (CRUD, warunkowe PUT, Idempotency-Key, atomiczne akcje, relacje M:N)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create user (POST, Idempotency)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "abc123"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:1234/users",
+          "host": [
+            "http://localhost:1234"
+          ],
+          "path": [
+            "users"
+          ],
+          "query": []
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Ala\",\n  \"email\": \"ala@example.com\"\n}"
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Repeat create user (POST again with same Idempotency-Key)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "abc123"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:1234/users",
+          "host": [
+            "http://localhost:1234"
+          ],
+          "path": [
+            "users"
+          ],
+          "query": []
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Ala\",\n  \"email\": \"ala@example.com\"\n}"
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get users with pagination",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:1234/users",
+          "host": [
+            "http://localhost:1234"
+          ],
+          "path": [
+            "users"
+          ],
+          "query": [
+            {
+              "key": "_page",
+              "value": "1"
+            },
+            {
+              "key": "_limit",
+              "value": "2"
+            }
+          ]
+        },
+        "body": {}
+      },
+      "response": []
+    },
+    {
+      "name": "Get single user",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:1234/users/{id}",
+          "host": [
+            "http://localhost:1234"
+          ],
+          "path": [
+            "users",
+            "{id}"
+          ],
+          "query": []
+        },
+        "body": {}
+      },
+      "response": []
+    },
+    {
+      "name": "Update user with If-Match",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "\"some-etag\""
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:1234/users/{id}",
+          "host": [
+            "http://localhost:1234"
+          ],
+          "path": [
+            "users",
+            "{id}"
+          ],
+          "query": []
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Ala Updated\"\n}"
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Delete user",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:1234/users/{id}",
+          "host": [
+            "http://localhost:1234"
+          ],
+          "path": [
+            "users",
+            "{id}"
+          ],
+          "query": []
+        },
+        "body": {}
+      },
+      "response": []
+    },
+    {
+      "name": "Create department",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:1234/departments",
+          "host": [
+            "http://localhost:1234"
+          ],
+          "path": [
+            "departments"
+          ],
+          "query": []
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Dept A\"\n}"
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get departments paginated",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:1234/departments",
+          "host": [
+            "http://localhost:1234"
+          ],
+          "path": [
+            "departments"
+          ],
+          "query": [
+            {
+              "key": "_page",
+              "value": "1"
+            },
+            {
+              "key": "_limit",
+              "value": "2"
+            }
+          ]
+        },
+        "body": {}
+      },
+      "response": []
+    },
+    {
+      "name": "Get single department",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:1234/departments/{id}",
+          "host": [
+            "http://localhost:1234"
+          ],
+          "path": [
+            "departments",
+            "{id}"
+          ],
+          "query": []
+        },
+        "body": {}
+      },
+      "response": []
+    },
+    {
+      "name": "Transfer user between departments",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:1234/actions/transfer-user",
+          "host": [
+            "http://localhost:1234"
+          ],
+          "path": [
+            "actions",
+            "transfer-user"
+          ],
+          "query": []
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": \"some-user-id\",\n  \"fromDept\": \"deptA\",\n  \"toDept\": \"deptB\"\n}"
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Link department with env",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:1234/departments/dep1/envs/env1",
+          "host": [
+            "http://localhost:1234"
+          ],
+          "path": [
+            "departments",
+            "dep1",
+            "envs",
+            "env1"
+          ],
+          "query": []
+        },
+        "body": {}
+      },
+      "response": []
+    },
+    {
+      "name": "Get envs for department",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:1234/departments/dep1/envs",
+          "host": [
+            "http://localhost:1234"
+          ],
+          "path": [
+            "departments",
+            "dep1",
+            "envs"
+          ],
+          "query": []
+        },
+        "body": {}
+      },
+      "response": []
+    },
+    {
+      "name": "Unlink department from env",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:1234/departments/dep1/envs/env1",
+          "host": [
+            "http://localhost:1234"
+          ],
+          "path": [
+            "departments",
+            "dep1",
+            "envs",
+            "env1"
+          ],
+          "query": []
+        },
+        "body": {}
+      },
+      "response": []
+    }
+  ]
+}
