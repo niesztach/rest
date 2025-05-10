@@ -2,6 +2,7 @@
 import { db } from '../db/db.js';
 import express from 'express';
 import { randomBytes, createHash } from 'node:crypto';
+import slugify from 'slugify';
 
 
 const genId = () => randomBytes(8).toString('hex');
@@ -31,8 +32,8 @@ const router = express.Router();
     res.json(list);
   });
 
-  router.get('/:id', async (req, res) => {
-    const d = await db('departments').where('id', req.params.id).first();
+  router.get('/:slug', async (req, res) => {
+    const d = await db('departments').where('slug', req.params.slug).first();
     if (!d) return res.status(404).send('Department not found');
     res.set('ETag', genEtag(d));
     res.json(d);
@@ -48,46 +49,34 @@ const router = express.Router();
     const { name } = req.body;
     if (!name) return res.status(400).json({ message: 'Name required' });
     const id = genId();
-    await db('departments').insert({ id, name, updated_at: Date.now() });
-    const body = { id, name };
+    const slug = slugify(name, { lower: true, locale: 'pl', strict: true });
+    await db('departments').insert({ slug, name, updated_at: Date.now() });
+    const body = { slug, name };
     if (key) await saveIdempotency(key, { status: 201, body });
     res.status(201).json(body);
   });
   
-  
-  router.put('/id', async (req, res) => {
-    const ifMatch = req.header('If-Match');
-    if (!ifMatch) return res.status(428).send('If-Match required');
-    const d = await db('departments').where('id', req.params.id).first();
-    if (!d) return res.status(404).send();
-    if (genEtag(d) !== ifMatch) return res.status(412).send();
-    const { name } = req.body;
-    await db('departments').where('id', req.params.id).update({ name: name ?? d.name, updated_at: Date.now() });
-    const updated = await db('departments').where('id', req.params.id).first();
-    res.set('ETag', genEtag(updated));
-    res.json(updated);
-  });
 
-  router.delete('/id', async (req, res) => {
-    const del = await db('departments').where('id', req.params.id).del();
+  router.delete('/:slug', async (req, res) => {
+    const del = await db('departments').where('slug', req.params.slug).del();
     if (!del) return res.status(404).send();
     res.status(204).send();
   });
 
   // Nested users under dept
-  router.get('/:id/users', async (req, res) => {
-    const users = await db('users').where('department_id', req.params.id);
+  router.get('/:slug/users', async (req, res) => {
+    const users = await db('users').where('department_id', req.params.slug);
     res.json(users);
   });
 
-  router.put('/id/users/:userId', async (req, res) => {
-    const upd = await db('users').where('id', req.params.userId).update({ department_id: req.params.id });
+  router.put('/:slug/users/:userId', async (req, res) => {
+    const upd = await db('users').where('id', req.params.userId).update({ department_id: req.params.slug });
     if (!upd) return res.status(404).send();
     res.status(204).send();
   });
 
-  router.delete('/id/users/:userId', async (req, res) => {
-    const upd = await db('users').where('id', req.params.userId).update({ department_id: null });
+  router.delete('/:slug/users/:userId', async (req, res) => {
+    const upd = await db('users').where('slug', req.params.userId).update({ department_id: null });
     if (!upd) return res.status(404).send();
     res.status(204).send();
   });
