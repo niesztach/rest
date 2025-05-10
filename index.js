@@ -20,6 +20,10 @@ app.use(express.json());
 
   app.use('/departments', departmentsRoutes);
 
+  app.use('/envs', envsRoutes);
+
+  app.use('/actions', actionsRoutes);
+
 
 })();
 

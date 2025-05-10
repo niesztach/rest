@@ -58,6 +58,8 @@ const router = express.Router();
   
 
   router.delete('/:slug', async (req, res) => {
+    const count = await db('users').where('department_slug', req.params.slug).count('* as cnt').first();
+    if (count.cnt > 0) return res.status(409).json({ message: 'Department not empty' });
     const del = await db('departments').where('slug', req.params.slug).del();
     if (!del) return res.status(404).send();
     res.status(204).send();
@@ -65,18 +67,18 @@ const router = express.Router();
 
   // Nested users under dept
   router.get('/:slug/users', async (req, res) => {
-    const users = await db('users').where('department_id', req.params.slug);
+    const users = await db('users').where('department_slug', req.params.slug);
     res.json(users);
   });
 
   router.put('/:slug/users/:userId', async (req, res) => {
-    const upd = await db('users').where('id', req.params.userId).update({ department_id: req.params.slug });
+    const upd = await db('users').where('id', req.params.userId).update({ department_slug: req.params.slug });
     if (!upd) return res.status(404).send();
     res.status(204).send();
   });
 
   router.delete('/:slug/users/:userId', async (req, res) => {
-    const upd = await db('users').where('slug', req.params.userId).update({ department_id: null });
+    const upd = await db('users').where('id', req.params.userId).update({ department_slug: null });
     if (!upd) return res.status(404).send();
     res.status(204).send();
   });

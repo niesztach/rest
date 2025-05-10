@@ -92,14 +92,14 @@ const router = express.Router();
   const etag = genEtag(user);
   if (ifMatch !== etag) return res.status(412).send('Precondition Failed');
   // Pobierz department_id z body żądania
-  const { department_id } = req.body;
-  if (!department_id) return res.status(400).json({ message: 'Department ID required' });
+  const { slug } = req.body;
+  if (!slug) return res.status(400).json({ message: 'Department name required' });
   // Opcjonalnie: Sprawdź, czy department_id istnieje w tabeli departments
-  const department = await db('departments').where('id', department_id).first();
-  if (!department) return res.status(400).json({ message: 'Invalid Department ID' });
+  const department = await db('departments').where('slug', slug).first();
+  if (!department) return res.status(400).json({ message: 'Invalid Department name' });
   // Zaktualizuj użytkownika w bazie danych
   await db('users').where('id', req.params.id).update({
-    department_id,
+    department_slug: slug,
     updated_at: Date.now()
   });
 

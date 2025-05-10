@@ -21,14 +21,16 @@ async function saveIdempotency(key, response) {
 const router = express.Router();
 
   // --- ATOMIC ACTION: transfer user between departments ---
-  router.post('/actions/transfer-user', async (req, res) => {
+  router.post('/transfer-user', async (req, res) => {
     const { userId, fromDept, toDept } = req.body;
     try {
       await db.transaction(async trx => {
-        const u = await trx('users').where('id', userId).first();
-        if (!u) throw new Error('UserNotFound');
-        if (u.department_id !== fromDept) throw new Error('BadSource');
-        await trx('users').where('id', userId).update({ department_id: toDept });
+        if (fromDept === toDept) throw new Error('SameDepartment');
+        const user = await trx('users').where('id', userId).first();
+        if (!user) throw new Error('UserNotFound');
+        if (user.department_slug !== fromDept) throw new Error('BadSource');
+        if (!await trx('departments').where('slug', toDept).first()) throw new Error('BadTarget');
+        await trx('users').where('id', userId).update({ department_slug: toDept });
       });
       res.json({ message: 'Transfer success' });
     } catch (e) {
