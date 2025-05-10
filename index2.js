@@ -3,11 +3,11 @@ import { db } from './db/db.js';
 import { initSchema } from './db/initSchema.js';
 import { randomBytes, createHash } from 'node:crypto';
 
-const app = express();
+export const app = express();
 app.use(express.json());
 
 // Helpers
-const genId = () => randomBytes(8).toString('hex');
+export const genId = () => randomBytes(8).toString('hex');
 const genEtag = obj => `"${createHash('md5').update(JSON.stringify(obj)).digest('hex')}"`;
 
 // Idempotency: store processed POST keys

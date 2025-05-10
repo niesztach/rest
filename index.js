@@ -2,6 +2,9 @@ import express from 'express';
 import { db } from './db/db.js';
 import usersRoutes from './routes/users.js';
 import departmentsRoutes from './routes/departments.js';
+import envsRoutes from './routes/envs.js';
+import actionsRoutes from './routes/actions.js';
+
 //import departmentsRoutes from './routes/departments.js';
 import { initSchema } from './db/initSchema.js';
 

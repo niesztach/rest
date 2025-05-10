@@ -12,7 +12,6 @@ export async function up(knex) {
         table.string('name').notNullable();
         table.timestamp('updated_at').defaultTo(knex.fn.now());
       });
-    // … kolejne tabele …
   }
   
   /** @type {import('knex').Knex} */

@@ -30,20 +30,30 @@ const router = express.Router();
     res.set('X-Total-Count', total.cnt);
     res.json(list);
   });
-  router.get('/id', async (req, res) => {
+
+  router.get('/:id', async (req, res) => {
     const d = await db('departments').where('id', req.params.id).first();
     if (!d) return res.status(404).send('Department not found');
     res.set('ETag', genEtag(d));
     res.json(d);
   });
 
+  //POST create department (idempotent)
   router.post('/', async (req, res) => {
+    const key = req.header('Idempotency-Key');
+    if (key) {
+      const existing = await getIdempotency(key);
+      if (existing) return res.status(existing.status).json(JSON.parse(existing.body));
+    }
     const { name } = req.body;
     if (!name) return res.status(400).json({ message: 'Name required' });
     const id = genId();
     await db('departments').insert({ id, name, updated_at: Date.now() });
-    res.status(201).json({ id, name });
+    const body = { id, name };
+    if (key) await saveIdempotency(key, { status: 201, body });
+    res.status(201).json(body);
   });
+  
   
   router.put('/id', async (req, res) => {
     const ifMatch = req.header('If-Match');
@@ -57,6 +67,7 @@ const router = express.Router();
     res.set('ETag', genEtag(updated));
     res.json(updated);
   });
+
   router.delete('/id', async (req, res) => {
     const del = await db('departments').where('id', req.params.id).del();
     if (!del) return res.status(404).send();
@@ -64,15 +75,17 @@ const router = express.Router();
   });
 
   // Nested users under dept
-  router.get('/id/users', async (req, res) => {
+  router.get('/:id/users', async (req, res) => {
     const users = await db('users').where('department_id', req.params.id);
     res.json(users);
   });
+
   router.put('/id/users/:userId', async (req, res) => {
     const upd = await db('users').where('id', req.params.userId).update({ department_id: req.params.id });
     if (!upd) return res.status(404).send();
     res.status(204).send();
   });
+
   router.delete('/id/users/:userId', async (req, res) => {
     const upd = await db('users').where('id', req.params.userId).update({ department_id: null });
     if (!upd) return res.status(404).send();

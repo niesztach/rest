@@ -22,7 +22,7 @@ const router = express.Router();
 
 
   // POST create user (idempotent)
-  router.post('/users', async (req, res) => {
+  router.post('/', async (req, res) => {
     const key = req.header('Idempotency-Key');
     if (key) {
       const existing = await getIdempotency(key);
@@ -31,7 +31,7 @@ const router = express.Router();
     const { name, email } = req.body;
     if (!name) return res.status(400).json({ message: 'Name required' });
     const id = genId();
-    await db('').insert({ id, name, email, updated_at: Date.now() });
+    await db('users').insert({ id, name, email, updated_at: Date.now() });
     const body = { id, name, email };
     if (key) await saveIdempotency(key, { status: 201, body });
     res.status(201).json(body);
@@ -73,13 +73,43 @@ const router = express.Router();
     res.json(updated);
   });
 
-  // PATCH update user (unconditional)
+//   // PATCH update user (unconditional)
+//   router.patch('/:id', async (req, res) => {
+//     const { name, email } = req.body;
+//     await db('users').where('id', req.params.id).update({ name, email });
+//     const updated = await db('users').where('id', req.params.id).first();
+//     res.json(updated);
+//   });
+
+  //PATCH update user (department)
   router.patch('/:id', async (req, res) => {
-    const { name, email } = req.body;
-    await db('users').where('id', req.params.id).update({ name, email });
-    const updated = await db('users').where('id', req.params.id).first();
-    res.json(updated);
+  const ifMatch = req.header('If-Match');
+  if (!ifMatch) return res.status(428).send('If-Match required');
+  // Pobierz użytkownika z bazy danych
+  const user = await db('users').where('id', req.params.id).first();
+  if (!user) return res.status(404).send('User not found');
+  // Wygeneruj ETag dla bieżącego stanu użytkownika
+  const etag = genEtag(user);
+  if (ifMatch !== etag) return res.status(412).send('Precondition Failed');
+  // Pobierz department_id z body żądania
+  const { department_id } = req.body;
+  if (!department_id) return res.status(400).json({ message: 'Department ID required' });
+  // Opcjonalnie: Sprawdź, czy department_id istnieje w tabeli departments
+  const department = await db('departments').where('id', department_id).first();
+  if (!department) return res.status(400).json({ message: 'Invalid Department ID' });
+  // Zaktualizuj użytkownika w bazie danych
+  await db('users').where('id', req.params.id).update({
+    department_id,
+    updated_at: Date.now()
   });
+
+  // Pobierz zaktualizowanego użytkownika
+  const updatedUser = await db('users').where('id', req.params.id).first();
+
+  // Ustaw nowy ETag i zwróć zaktualizowanego użytkownika
+  res.set('ETag', genEtag(updatedUser));
+  res.json(updatedUser);
+});
 
   // DELETE user
   router.delete('/:id', async (req, res) => {
