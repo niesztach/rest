@@ -9,7 +9,7 @@ const genEtag = obj => `"${createHash('md5').update(JSON.stringify(obj)).digest(
 // Idempotency: store processed POST keys
 async function getIdempotency(key) {
   return db('idempotency_keys').where({ key }).first();
-}
+} 
 async function saveIdempotency(key, response) {
   await db('idempotency_keys').insert({
     key,
@@ -22,8 +22,20 @@ const router = express.Router();
 
 // Create env (owner department in body)
 router.post('/', async (req, res) => {
+
+    const key = req.header('Idempotency-Key');
+    if (!key) return res.status(400).json({ message: 'Idempotency-Key header required' });
+    if (key) {
+      const existing = await getIdempotency(key);
+      if (existing) return res.status(existing.status).json(JSON.parse(existing.body));
+    }
+
     const { name, ownerDept } = req.body;
     if (!name || !ownerDept) return res.status(400).json({ message: 'Name and ownerDept required' });
+    // sprawdz czy taki departament istnieje
+    const isDept = await db('departments').where('slug', ownerDept).first();
+    if (!isDept) return res.status(404).json({ message: 'Department not found' });
+
     const id = genId();
     await db.transaction(async trx => {
       // 1) create env
@@ -35,7 +47,11 @@ router.post('/', async (req, res) => {
         role: 'owner'
       });
     });
-    res.status(201).json({ id, name });
+
+    const body = { id, name };
+    if (key) await saveIdempotency(key, { status: 201, body });
+
+    res.status(201).json(body);
   });
   
 // Get departments for env
@@ -147,6 +163,25 @@ router.post('/:envId/departments', async (req, res) => {
     if (deptSlug === requesterDept) {
       return res.status(409).json({ message: 'Cannot update own department role' });
     }
+
+            // **GUARD: nie pozwalaj zdegradować, jeśli są taski tego działu**
+    // najpierw pobierz listę userów z tego działu
+    const userIds = await db('users')
+    .where('department_slug', deptSlug)
+    .pluck('id');
+
+    // potem oblicz liczbę tasków
+    const taskCount = await db('tasks')
+    .where({ env_id: envId })
+    .whereIn('author_id', userIds)
+    .count({ cnt: '*' })
+    .first();
+
+    // i dalej:
+    if (taskCount.cnt > 0 && role === 'member') {
+    return res.status(409).json({ message: 'Cannot demote department with existing tasks' });
+    }
+
     
 
     // 3) Zaktualizuj rolę
@@ -379,8 +414,9 @@ router.post('/:envId/departments', async (req, res) => {
           .join('users', 'env_departments.department_slug', 'users.department_slug')
           .where({ env_id: envId, id: userPoster })
           .first();
-        if (!access) {
-          return res.status(403).json({ message: 'User does not have access to this env' });
+          
+          if (!access || !['owner','reporter'].includes(access.role)) {
+            return res.status(403).json({ message: 'Insufficient role to create tasks' });
         }
 
         // 2) Zaktualizuj zadanie w bazie danych
@@ -408,8 +444,9 @@ router.post('/:envId/departments', async (req, res) => {
           .join('users', 'env_departments.department_slug', 'users.department_slug')
           .where({ env_id: envId, id: userPoster })
           .first();
-        if (!access) {
-          return res.status(403).json({ message: 'User does not have access to this env' });
+
+          if (!access || !['owner'].includes(access.role)) {
+            return res.status(403).json({ message: 'Insufficient role to create tasks' });
         }
 
         // 2) Sprawdź, czy nowe środowisko istnieje
@@ -449,8 +486,9 @@ router.post('/:envId/departments', async (req, res) => {
           .join('users', 'env_departments.department_slug', 'users.department_slug')
           .where({ env_id: envId, id: userPoster })
           .first();
-        if (!access) {
-          return res.status(403).json({ message: 'User does not have access to this env' });
+
+          if (!access || !['owner','reporter'].includes(access.role)) {
+            return res.status(403).json({ message: 'Insufficient role to create tasks' });
         }
 
         // 2) Zaktualizuj status zadania w bazie danych
@@ -478,13 +516,17 @@ router.post('/:envId/departments', async (req, res) => {
           .join('users', 'env_departments.department_slug', 'users.department_slug')
           .where({ env_id: envId, id: userPoster })
           .first();
-        if (!access) {
-          return res.status(403).json({ message: 'User does not have access to this env' });
+
+        if (!access || !['owner'].includes(access.role)) {
+            return res.status(403).json({ message: 'Insufficient role to create tasks' });
         }
 
         // 2) Sprawdź, czy nowy właściciel istnieje
         const newOwnerExists = await db('users').where('id', newOwnerId).first();
         if (!newOwnerExists) return res.status(404).json({ message: 'New owner not found' });
+
+        // sprawdź czy nowy właściciel nie ma rangi member
+        
 
         // Sprawdz czy nowy wlasciciel ma dostep do srodowiska
         const newOwnerAccess = await db('env_departments')
@@ -517,8 +559,9 @@ router.post('/:envId/departments', async (req, res) => {
           .join('users', 'env_departments.department_slug', 'users.department_slug')
           .where({ env_id: envId, id: userPoster })
           .first();
-        if (!access) {
-          return res.status(403).json({ message: 'User does not have access to this env' });
+
+        if (!access || !['owner','reporter'].includes(access.role)) {
+            return res.status(403).json({ message: 'Insufficient role to create tasks' });
         }
 
         // 2) Usuń zadanie z bazy danych
@@ -566,7 +609,7 @@ router.post('/:envId/departments', async (req, res) => {
         res.json(tasks); }
     );  
 
-    
+
 
   
 

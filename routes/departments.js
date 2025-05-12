@@ -83,6 +83,12 @@ const router = express.Router();
     res.status(204).send();
   });
 
+    // Redirect to users/:userId
+    router.get('/:slug/users/:userId', (req, res) => {
+        res.redirect(307, `/users/${req.params.userId}`);
+    });
+  
+
   // routes/departments.js
 
 router.get('/:slug/envs', async (req, res) => {

@@ -16,6 +16,22 @@ app.use(express.json());
 (async () => {
   await initSchema();
 
+    // -------------- CLEANUP IDP KEYS ----------------
+    const IDEMPOTENCY_TTL_MS = 10 * 1000;     // 30 sekund
+    const CLEANUP_INTERVAL = 20 * 1000;      // co 60 sekund
+  
+    setInterval(async () => {
+      const cutoff = new Date(Date.now() - IDEMPOTENCY_TTL_MS).toISOString();
+      try {
+        const count = await db('idempotency_keys')
+          .where('created_at', '<', cutoff)
+          .del();
+        console.log(`Idempotency cleanup: usunięto ${count} kluczy starszych niż ${IDEMPOTENCY_TTL_MS/1000}s`);
+      } catch (err) {
+        console.error('Błąd podczas cleanup idempotency_keys:', err);
+      }
+    }, CLEANUP_INTERVAL);
+
   app.use('/users', usersRoutes);
 
   app.use('/departments', departmentsRoutes);
@@ -23,6 +39,8 @@ app.use(express.json());
   app.use('/envs', envsRoutes);
 
   app.use('/actions', actionsRoutes);
+
+
 
 
 })();
