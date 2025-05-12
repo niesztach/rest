@@ -83,4 +83,18 @@ const router = express.Router();
     res.status(204).send();
   });
 
+  // routes/departments.js
+
+router.get('/:slug/envs', async (req, res) => {
+    const { slug } = req.params;
+  
+    const envs = await db('envs')
+      .join('env_departments', 'envs.id', 'env_departments.env_id')
+      .where('env_departments.department_slug', slug)
+      .select('envs.*', 'env_departments.role');
+  
+    res.json(envs);
+  });
+  
+
 export default router;
