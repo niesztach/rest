@@ -39,4 +39,54 @@ const router = express.Router();
     }
   });
 
+  // --- ATOMIC ACTION: transfer task between environments ---
+
+  router.post('/transfer-task', async (req, res) => {
+    const { taskId, fromEnv, toEnv } = req.body;
+    const userId = req.header('User-ID');
+    if (!userId) return res.status(400).send('Missing User-ID header');
+  
+    // 1) Pobierz usera i jego department_slug
+    const user = await db('users').where('id', userId).first();
+    if (!user) return res.status(404).send('User not found');
+  
+    // 2) Lista env_id, do których ten department należy
+    const userEnvIds = await db('env_departments')
+      .where('department_slug', user.department_slug)
+      .pluck('env_id');
+  
+    if (!userEnvIds.includes(fromEnv) || !userEnvIds.includes(toEnv)) {
+      return res.status(403).send('User does not have access to one of the environments');
+    }
+  
+    // 3) Atomowy transfer
+    try {
+      await db.transaction(async trx => {
+        if (fromEnv === toEnv) throw new Error('SameEnvironment');
+  
+        const task = await trx('tasks').where('id', taskId).first();
+        if (!task) throw new Error('TaskNotFound');
+  
+        if (task.env_id !== fromEnv) throw new Error('BadSource');
+  
+        const dest = await trx('envs').where('id', toEnv).first();
+        if (!dest) throw new Error('BadTarget');
+  
+        await trx('tasks')
+          .where('id', taskId)
+          .update({
+            env_id:     toEnv,
+            author_id:  userId,
+            status:     'moved',
+            updated_at: Date.now()
+          });
+      });
+  
+      res.json({ message: 'Transfer success' });
+    } catch (e) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+  
+
   export default router;
