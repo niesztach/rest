@@ -57,15 +57,18 @@ const router = express.Router();
   });
 
 
-  // PUT update user (conditional)
+  // PUT update user (ETag)
   router.put('/:id', async (req, res) => {
     // LOST UPDATE PROTECTION
     const ifMatch = req.header('If-Match');
     if (!ifMatch) return res.status(428).send('If-Match required');
+    // check if user exists
     const u = await db('users').where('id', req.params.id).first();
     if (!u) return res.status(404).send('User not found');
+    // check etag
     const etag = genEtag(u);
     if (ifMatch !== etag) return res.status(412).send('Precondition Failed');
+    // get item from request body
     const { name, email } = req.body;
     await db('users').where('id', req.params.id).update({ name: name ?? u.name, email: email ?? u.email, updated_at: Date.now() });
     const updated = await db('users').where('id', req.params.id).first();
@@ -73,49 +76,47 @@ const router = express.Router();
     res.json(updated);
   });
 
-//   // PATCH update user (unconditional)
-//   router.patch('/:id', async (req, res) => {
-//     const { name, email } = req.body;
-//     await db('users').where('id', req.params.id).update({ name, email });
-//     const updated = await db('users').where('id', req.params.id).first();
-//     res.json(updated);
-//   });
-
   //PATCH update user (department)
   router.patch('/:id', async (req, res) => {
   const ifMatch = req.header('If-Match');
   if (!ifMatch) return res.status(428).send('If-Match required');
-  // Pobierz użytkownika z bazy danych
+  // get user from db
   const user = await db('users').where('id', req.params.id).first();
   if (!user) return res.status(404).send('User not found');
-  // Wygeneruj ETag dla bieżącego stanu użytkownika
+  // does he have any tasks?
+  const author = await db('tasks').where('author_id', req.params.id).first();
+  if (author) return res.status(409).json({ message: 'User is author of task' });
+  // check etag
   const etag = genEtag(user);
   if (ifMatch !== etag) return res.status(412).send('Precondition Failed');
-  // Pobierz department_id z body żądania
+  // get department slug from request body
   const { slug } = req.body;
   if (!slug) return res.status(400).json({ message: 'Department name required' });
-  // Opcjonalnie: Sprawdź, czy department_id istnieje w tabeli departments
+  // check if department exists
   const department = await db('departments').where('slug', slug).first();
   if (!department) return res.status(400).json({ message: 'Invalid Department name' });
-  // Zaktualizuj użytkownika w bazie danych
+  // update
   await db('users').where('id', req.params.id).update({
     department_slug: slug,
     updated_at: Date.now()
   });
-
-  // Pobierz zaktualizowanego użytkownika
+  // generate new etag
   const updatedUser = await db('users').where('id', req.params.id).first();
-
-  // Ustaw nowy ETag i zwróć zaktualizowanego użytkownika
   res.set('ETag', genEtag(updatedUser));
+
   res.json(updatedUser);
 });
 
   // DELETE user
   router.delete('/:id', async (req, res) => {
-    const deleted = await db('users').where('id', req.params.id).del();
-    if (!deleted) return res.status(404).send('User not found');
-    res.status(204).send();
+  // does he have any tasks?
+  const author = await db('tasks').where('author_id', req.params.id).first();
+  if (author) return res.status(409).json({ message: 'User is author of task' });
+
+  // check if user exists
+  const deleted = await db('users').where('id', req.params.id).del();
+  if (!deleted) return res.status(404).send('User not found');
+  res.status(204).send();
   });
 
   export default router;

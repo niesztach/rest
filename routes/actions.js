@@ -21,28 +21,35 @@ async function saveIdempotency(key, response) {
 const router = express.Router();
 
   // --- ATOMIC ACTION: transfer user between departments ---
-  router.post('/transfer-user', async (req, res) => {
-    const { userId, fromDept, toDept } = req.body;
-    try {
-      await db.transaction(async trx => {
-        if (fromDept === toDept) throw new Error('SameDepartment');
-        const user = await trx('users').where('id', userId).first();
-        if (!user) throw new Error('UserNotFound');
-        if (user.department_slug !== fromDept) throw new Error('BadSource');
-        if (!await trx('departments').where('slug', toDept).first()) throw new Error('BadTarget');
-        await trx('users').where('id', userId).update({ department_slug: toDept });
-      });
-      res.json({ message: 'Transfer success' });
-    } catch (e) {
-      console.error(e);
-      res.status(400).json({ message: e.message });
-    }
-  });
+router.post('/transfer-user', async (req, res) => {
+  const { userId, fromDept, toDept, testFail } = req.body;
+  try {
+    await db.transaction(async trx => {
+      if (fromDept === toDept) throw new Error('SameDepartment');
+      const user = await trx('users').where('id', userId).first();
+      if (!user) throw new Error('UserNotFound');
+      if (user.department_slug !== fromDept) throw new Error('BadSource');
+      if (!await trx('departments').where('slug', toDept).first()) throw new Error('BadTarget');
+
+      // Właściwy update
+      await trx('users').where('id', userId).update({ department_slug: toDept });
+
+      // Tutaj testujemy rollback, jeśli przyszła flaga
+      if (testFail) {
+        throw new Error('Simulated failure after user update');
+      }
+    });
+    res.json({ message: 'Transfer success' });
+  } catch (e) {
+    res.status(400).json({ message: e.message });
+  }
+});
+
 
   // --- ATOMIC ACTION: transfer task between environments ---
 
   router.post('/transfer-task', async (req, res) => {
-    const { taskId, fromEnv, toEnv } = req.body;
+    const { taskId, fromEnv, toEnv} = req.body;
     const userId = req.header('User-ID');
     if (!userId) return res.status(400).send('Missing User-ID header');
   
@@ -60,33 +67,31 @@ const router = express.Router();
     }
   
     // 3) Atomowy transfer
-    try {
-      await db.transaction(async trx => {
-        if (fromEnv === toEnv) throw new Error('SameEnvironment');
-  
-        const task = await trx('tasks').where('id', taskId).first();
-        if (!task) throw new Error('TaskNotFound');
-  
-        if (task.env_id !== fromEnv) throw new Error('BadSource');
-  
-        const dest = await trx('envs').where('id', toEnv).first();
-        if (!dest) throw new Error('BadTarget');
-  
-        await trx('tasks')
-          .where('id', taskId)
-          .update({
-            env_id:     toEnv,
-            author_id:  userId,
-            status:     'moved',
-            updated_at: Date.now()
-          });
-      });
-  
-      res.json({ message: 'Transfer success' });
-    } catch (e) {
-      res.status(400).json({ message: e.message });
-    }
-  });
+   try {
+    await db.transaction(async trx => {
+      if (fromEnv === toEnv) throw new Error('SameEnvironment');
+      const task = await trx('tasks').where('id', taskId).first();
+      if (!task) throw new Error('TaskNotFound');
+      if (task.env_id !== fromEnv) throw new Error('BadSource');
+      if (!await trx('envs').where('id', toEnv).first()) throw new Error('BadTarget');
+
+      // Właściwy update
+      await trx('tasks')
+        .where({ id: taskId })
+        .update({
+          env_id:     toEnv,
+          author_id:  userId,
+          status:     'moved',
+          updated_at: Date.now()
+        });
+
+    });
+
+    res.json({ message: 'Transfer success' });
+  } catch (e) {
+    res.status(400).json({ message: e.message });
+  }
+});
   
 
   export default router;

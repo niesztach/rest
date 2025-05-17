@@ -4,7 +4,6 @@ import express from 'express';
 import { randomBytes, createHash } from 'node:crypto';
 import slugify from 'slugify';
 
-
 const genId = () => randomBytes(8).toString('hex');
 const genEtag = obj => `"${createHash('md5').update(JSON.stringify(obj)).digest('hex')}"`;
 // Idempotency: store processed POST keys
@@ -21,7 +20,7 @@ async function saveIdempotency(key, response) {
 }
 const router = express.Router();
 
-// --- DEPARTMENTS ---
+  // Get /departments?page & limit
   router.get('/', async (req, res) => {
     const page = +req.query._page || 1;
     const limit = +req.query._limit || 10;
@@ -32,6 +31,7 @@ const router = express.Router();
     res.json(list);
   });
 
+  // Get single department 
   router.get('/:slug', async (req, res) => {
     const d = await db('departments').where('slug', req.params.slug).first();
     if (!d) return res.status(404).send('Department not found');
@@ -48,7 +48,6 @@ const router = express.Router();
     }
     const { name } = req.body;
     if (!name) return res.status(400).json({ message: 'Name required' });
-    const id = genId();
     const slug = slugify(name, { lower: true, locale: 'pl', strict: true });
     await db('departments').insert({ slug, name, updated_at: Date.now() });
     const body = { slug, name };
@@ -57,6 +56,7 @@ const router = express.Router();
   });
   
 
+  // DELETE department
   router.delete('/:slug', async (req, res) => {
     const count = await db('users').where('department_slug', req.params.slug).count('* as cnt').first();
     if (count.cnt > 0) return res.status(409).json({ message: 'Department not empty' });
@@ -65,28 +65,40 @@ const router = express.Router();
     res.status(204).send();
   });
 
-  // Nested users under dept
+  // GET nested users under dept
   router.get('/:slug/users', async (req, res) => {
-    const users = await db('users').where('department_slug', req.params.slug);
+    const d = await db('departments').where('slug', req.params.slug).first();
+    if (!d) return res.status(404).send('Department not found');
+    // get users in department
+    const users = await db('users').where('department_slug', req.params.slug).select('*');
     res.json(users);
   });
 
-  router.put('/:slug/users/:userId', async (req, res) => {
+  // POST user to department
+  router.post('/:slug/users/:userId', async (req, res) => {
+    // does he have any tasks?
+    const author = await db('tasks').where('author_id', req.params.userId).first();
+    if (author) return res.status(409).json({ message: 'User is author of task' });
+    // update user department
     const upd = await db('users').where('id', req.params.userId).update({ department_slug: req.params.slug });
     if (!upd) return res.status(404).send();
     res.status(204).send();
   });
 
+  // DELETE user from department
   router.delete('/:slug/users/:userId', async (req, res) => {
+     // does he have any tasks?
+    const author = await db('tasks').where('author_id', req.params.userId).first();
+    if (author) return res.status(409).json({ message: 'User is author of task' });
     const upd = await db('users').where('id', req.params.userId).update({ department_slug: null });
     if (!upd) return res.status(404).send();
     res.status(204).send();
   });
 
-    // Redirect to users/:userId
-    router.get('/:slug/users/:userId', (req, res) => {
-        res.redirect(307, `/users/${req.params.userId}`);
-    });
+  // Redirect to users/:userId
+  router.get('/:slug/users/:userId', (req, res) => {
+      res.redirect(307, `/users/${req.params.userId}`);
+  });
   
 
   // routes/departments.js
