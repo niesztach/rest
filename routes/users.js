@@ -76,36 +76,36 @@ const router = express.Router();
     res.json(updated);
   });
 
-  //PATCH update user (department)
-  router.patch('/:id', async (req, res) => {
-  const ifMatch = req.header('If-Match');
-  if (!ifMatch) return res.status(428).send('If-Match required');
-  // get user from db
-  const user = await db('users').where('id', req.params.id).first();
-  if (!user) return res.status(404).send('User not found');
-  // does he have any tasks?
-  const author = await db('tasks').where('author_id', req.params.id).first();
-  if (author) return res.status(409).json({ message: 'User is author of task' });
-  // check etag
-  const etag = genEtag(user);
-  if (ifMatch !== etag) return res.status(412).send('Precondition Failed');
-  // get department slug from request body
-  const { slug } = req.body;
-  if (!slug) return res.status(400).json({ message: 'Department name required' });
-  // check if department exists
-  const department = await db('departments').where('slug', slug).first();
-  if (!department) return res.status(400).json({ message: 'Invalid Department name' });
-  // update
-  await db('users').where('id', req.params.id).update({
-    department_slug: slug,
-    updated_at: Date.now()
-  });
-  // generate new etag
-  const updatedUser = await db('users').where('id', req.params.id).first();
-  res.set('ETag', genEtag(updatedUser));
+//   //PATCH update user (department)
+//   router.patch('/:id', async (req, res) => {
+//   const ifMatch = req.header('If-Match');
+//   if (!ifMatch) return res.status(428).send('If-Match required');
+//   // get user from db
+//   const user = await db('users').where('id', req.params.id).first();
+//   if (!user) return res.status(404).send('User not found');
+//   // does he have any tasks?
+//   const author = await db('tasks').where('author_id', req.params.id).first();
+//   if (author) return res.status(409).json({ message: 'User is author of task' });
+//   // check etag
+//   const etag = genEtag(user);
+//   if (ifMatch !== etag) return res.status(412).send('Precondition Failed');
+//   // get department slug from request body
+//   const { slug } = req.body;
+//   if (!slug) return res.status(400).json({ message: 'Department name required' });
+//   // check if department exists
+//   const department = await db('departments').where('slug', slug).first();
+//   if (!department) return res.status(400).json({ message: 'Invalid Department name' });
+//   // update
+//   await db('users').where('id', req.params.id).update({
+//     department_slug: slug,
+//     updated_at: Date.now()
+//   });
+//   // generate new etag
+//   const updatedUser = await db('users').where('id', req.params.id).first();
+//   res.set('ETag', genEtag(updatedUser));
 
-  res.json(updatedUser);
-});
+//   res.json(updatedUser);
+// });
 
   // DELETE user
   router.delete('/:id', async (req, res) => {

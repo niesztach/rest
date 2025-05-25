@@ -4,20 +4,6 @@ import express from 'express';
 import { randomBytes, createHash } from 'node:crypto';
 
 
-const genId = () => randomBytes(8).toString('hex');
-const genEtag = obj => `"${createHash('md5').update(JSON.stringify(obj)).digest('hex')}"`;
-// Idempotency: store processed POST keys
-async function getIdempotency(key) {
-  return db('idempotency_keys').where({ key }).first();
-}
-async function saveIdempotency(key, response) {
-  await db('idempotency_keys').insert({
-    key,
-    status: response.status,
-    body: JSON.stringify(response.body),
-    created_at: Date.now()
-  });
-}
 const router = express.Router();
 
   // --- ATOMIC ACTION: transfer user between departments ---
@@ -31,13 +17,12 @@ router.post('/transfer-user', async (req, res) => {
       if (user.department_slug !== fromDept) throw new Error('BadSource');
       if (!await trx('departments').where('slug', toDept).first()) throw new Error('BadTarget');
 
+      // SPRAWDŹ, CZY JEST AUTOREM JAKIEGOŚ TASKA
+      const isAuthor = await trx('tasks').where('author_id', userId).first();
+      if (isAuthor) throw new Error('UserIsAuthorOfTask');
+
       // Właściwy update
       await trx('users').where('id', userId).update({ department_slug: toDept });
-
-      // Tutaj testujemy rollback, jeśli przyszła flaga
-      if (testFail) {
-        throw new Error('Simulated failure after user update');
-      }
     });
     res.json({ message: 'Transfer success' });
   } catch (e) {
@@ -53,11 +38,10 @@ router.post('/transfer-user', async (req, res) => {
     const userId = req.header('User-ID');
     if (!userId) return res.status(400).send('Missing User-ID header');
   
-    // 1) Pobierz usera i jego department_slug
     const user = await db('users').where('id', userId).first();
     if (!user) return res.status(404).send('User not found');
   
-    // 2) Lista env_id, do których ten department należy
+    // env_id in department
     const userEnvIds = await db('env_departments')
       .where('department_slug', user.department_slug)
       .pluck('env_id');
@@ -66,7 +50,7 @@ router.post('/transfer-user', async (req, res) => {
       return res.status(403).send('User does not have access to one of the environments');
     }
   
-    // 3) Atomowy transfer
+    // transfer
    try {
     await db.transaction(async trx => {
       if (fromEnv === toEnv) throw new Error('SameEnvironment');
@@ -75,7 +59,7 @@ router.post('/transfer-user', async (req, res) => {
       if (task.env_id !== fromEnv) throw new Error('BadSource');
       if (!await trx('envs').where('id', toEnv).first()) throw new Error('BadTarget');
 
-      // Właściwy update
+      // update
       await trx('tasks')
         .where({ id: taskId })
         .update({
@@ -92,6 +76,36 @@ router.post('/transfer-user', async (req, res) => {
     res.status(400).json({ message: e.message });
   }
 });
-  
+
+// transakcja łączenia dwóch działów
+
+router.post('/merge-departments', async (req, res) => {
+  const { fromDept, toDept } = req.body;
+  try {
+    await db.transaction(async trx => {
+      if (fromDept === toDept) throw new Error('SameDepartment');
+      const from = await trx('departments').where('slug', fromDept).first();
+      const to = await trx('departments').where('slug', toDept).first();
+      if (!from || !to) throw new Error('DepartmentNotFound');
+
+      // check if any user is author of task
+      const author = await trx('tasks').where('author_id', from.id).first();
+      if (author) throw new Error('UserIsAuthorOfTask');
+
+      // update users
+      await trx('users')
+        .where('department_slug', fromDept)
+        .update({ department_slug: toDept });
+
+      // delete old department
+      await trx('departments').where('slug', fromDept).del();
+    });
+    res.json({ message: 'Merge success' });
+  } catch (e) {
+    res.status(400).json({ message: e.message });
+  } 
+}
+);  
+
 
   export default router;
